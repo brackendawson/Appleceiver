@@ -159,7 +159,9 @@ void loop() {
       break;
   }
   
+  digitalWrite(ledPin, LOW);
   if (newMsg == true) {
+    digitalWrite(ledPin, HIGH);
     Serial.print(rcvMsgL, HEX);
     Serial.print(rcvMsgR, HEX);
     Serial.print("\n");
@@ -171,6 +173,7 @@ void loop() {
 //      Serial.print(rcvMsgR, HEX);
 //      Serial.print("n\n");
     } else {
+      digitalWrite(ledPin, HIGH);
       Serial.print(rcvMsgL, HEX);
       Serial.print(rcvMsgR, HEX);
       Serial.print("r\n");
