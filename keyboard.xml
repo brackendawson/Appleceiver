@@ -1,0 +1,14 @@
+<keymap>
+  <FullscreenVideo>
+    <keyboard>
+      <up>VolumeUp</up>
+      <down>VolumeDown</down>
+    </keyboard>
+  </FullscreenVideo>
+  <Visualisation>
+    <keyboard>
+      <up>VolumeUp</up>
+      <down>VolumeDown</down>
+    </keyboard>
+  </Visualisation>
+</keymap>
