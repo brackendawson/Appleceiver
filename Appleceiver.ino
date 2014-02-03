@@ -2,31 +2,53 @@ const int buttonPin = 4;
 const int irPin = 5;
 const int ledPin = 6;
 
-//NFC IR receiver state machine
+//NEC IR receiver state machine
 #define none      0
 #define startLow  1
 #define startHigh 2
 #define bitLow    3
 #define bitHigh   4
+#define stopLow   5
 unsigned long startTime;
 int rcvState = 0;
-#define startLowMinT 8500 //us
-#define startLowMaxT 9500
-#define startHighMinT 4000
-#define startHighMaxT 5000
+int rcvBit = 31;
+unsigned int rcvMsgL;
+unsigned int rcvMsgR;
+boolean newMsg = false;
+#define startLowMinT 8800 //us
+#define startLowMaxT 9200
+#define startHighMinT 4300
+#define startHighMaxT 4700
+#define bitLowMinT 380
+#define bitLowMaxT 780
+#define bit0HighMinT 380
+#define bit0HighMaxT 780
+#define bit1HighMinT 1500
+#define bit1HighMaxT 1900
 
 unsigned long microsDelta(unsigned long last, unsigned long now);
+
+int lastRcvState = 99;
 
 void setup() {
   pinMode(buttonPin, INPUT);
   pinMode(irPin, INPUT);
   pinMode(ledPin, OUTPUT);
-  Keyboard.begin();
+//  Keyboard.begin();
+  Serial.begin(9600);
 }
 
 void loop() {
+  //state transition tracing
+  /*if (rcvState != lastRcvState) {
+    Serial.print(rcvState, DEC);
+    Serial.print("s\n");
+    lastRcvState = rcvState;
+  }*/
+  
   switch(rcvState) {
     case none:
+      digitalWrite(ledPin, LOW);
       //if the input is low, start timing the start low pulse
       if (digitalRead(irPin) == LOW) {
         startTime = micros();
@@ -42,6 +64,8 @@ void loop() {
           rcvState++;
         } else {
           //bad starting low pulse, abort
+          Serial.print(duration, DEC);
+          Serial.print(" BADSTARTL!\n");
           rcvState = none;
         }
       }
@@ -52,19 +76,78 @@ void loop() {
         unsigned long duration = microsDelta(startTime, micros());
         if ((duration > startHighMinT) and (duration < startHighMaxT)) {
           startTime = micros();
+          rcvMsgL = 0;
+          rcvMsgR = 0;
+          rcvBit = 31;
           rcvState++;
-          digitalWrite(ledPin, HIGH);
         } else {
           //bad starting high pulse, abort
+          Serial.print(duration, DEC);
+          Serial.print(" BADSTARTH!\n");
           rcvState = none;
         }
       }
-
       break;
     case bitLow:
+      //if the input is high, validate the length of the bit low pulse and start timing the bit high pulse
+      if (digitalRead(irPin) == HIGH) {
+        unsigned long duration = microsDelta(startTime, micros());
+        if ((duration > bitLowMinT) and (duration < bitLowMaxT)) {
+          startTime = micros();
+          rcvState++;
+        } else {
+          //bad bit low pulse, abort
+          Serial.print(duration, DEC);
+          Serial.print(" BADBITL!\n");
+          rcvState = none;
+        }
+      }
       break;
     case bitHigh:
+      //if the input is low, validate the length of the bit high pulse, determine the value and start timing the next bit low pulse if there is a next bit else watch the end low pulse
+      if (digitalRead(irPin) == LOW) {
+        unsigned long duration = microsDelta(startTime, micros());
+        if ((duration > bit0HighMinT) and (duration < bit0HighMaxT)) {
+          startTime = micros();
+          if (rcvBit--) {
+            rcvState--;
+          } else {
+            rcvState++;
+          }
+        } else if ((duration > bit1HighMinT) and (duration < bit1HighMaxT)) {
+          startTime = micros();
+          rcvMsgR |= (1 << (rcvBit % 16));
+          if (rcvBit--) {
+            rcvState--;
+          } else {
+            rcvState++;
+          }
+        } else {
+          //bad bit high pulse, abort
+          Serial.print(duration, DEC);
+          Serial.print(" BADBITH!\n");
+          rcvState = none;
+        }
+        if (rcvBit == 15) {
+          rcvMsgL = rcvMsgR;
+          rcvMsgR = 0;
+        }
+      }
       break;
+    case stopLow:
+      //forget timing, just wait for the in put to go high
+      if (digitalRead(irPin) == HIGH) {
+        rcvState = none;
+        newMsg = true;
+      }
+      break;
+  }
+  
+  if (newMsg == true) {
+    Serial.print(rcvMsgL, HEX);
+    Serial.print(rcvMsgR, HEX);
+    Serial.print("\n");
+    newMsg = false;
   }
 }
 
