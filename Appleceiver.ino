@@ -9,12 +9,16 @@ const int ledPin = 6;
 #define bitLow    3
 #define bitHigh   4
 #define stopLow   5
+#define repHigh   6
 unsigned long startTime;
 int rcvState = 0;
 int rcvBit = 31;
 unsigned int rcvMsgL;
 unsigned int rcvMsgR;
 boolean newMsg = false;
+boolean tmpNewMsg = false;
+boolean repMsg = false;
+boolean tmpRepMsg = false;
 #define startLowMinT 8800 //us
 #define startLowMaxT 9200
 #define startHighMinT 4300
@@ -25,6 +29,8 @@ boolean newMsg = false;
 #define bit0HighMaxT 780
 #define bit1HighMinT 1500
 #define bit1HighMaxT 1900
+#define repHighMinT 2000
+#define repHighMaxT 2400
 
 unsigned long microsDelta(unsigned long last, unsigned long now);
 
@@ -61,6 +67,8 @@ void loop() {
         unsigned long duration = microsDelta(startTime, micros());
         if ((duration > startLowMinT) and (duration < startLowMaxT)) {
           startTime = micros();
+          tmpNewMsg = false;
+          tmpRepMsg = false;
           rcvState++;
         } else {
           //bad starting low pulse, abort
@@ -71,7 +79,7 @@ void loop() {
       }
       break;
     case startHigh:
-      //if the input is low, validate the length of the start high pulse and start timing the first bit low pulse
+      //if the input is low, validate the length of the start high pulse and start timing the first bit low pulse, or detect a repet code and watch the stop low pulse
       if (digitalRead(irPin) == LOW) {
         unsigned long duration = microsDelta(startTime, micros());
         if ((duration > startHighMinT) and (duration < startHighMaxT)) {
@@ -79,7 +87,11 @@ void loop() {
           rcvMsgL = 0;
           rcvMsgR = 0;
           rcvBit = 31;
+          tmpNewMsg = true;
           rcvState++;
+        } else if ((duration > repHighMinT) and (duration < repHighMaxT)) {
+          tmpRepMsg = true;
+          rcvState = stopLow;          
         } else {
           //bad starting high pulse, abort
           Serial.print(duration, DEC);
@@ -104,7 +116,7 @@ void loop() {
       }
       break;
     case bitHigh:
-      //if the input is low, validate the length of the bit high pulse, determine the value and start timing the next bit low pulse if there is a next bit else watch the end low pulse
+      //if the input is low, validate the length of the bit high pulse, determine the value and start timing the next bit low pulse if there is a next bit else watch the stop low pulse
       if (digitalRead(irPin) == LOW) {
         unsigned long duration = microsDelta(startTime, micros());
         if ((duration > bit0HighMinT) and (duration < bit0HighMaxT)) {
@@ -138,7 +150,8 @@ void loop() {
       //forget timing, just wait for the in put to go high
       if (digitalRead(irPin) == HIGH) {
         rcvState = none;
-        newMsg = true;
+        newMsg = tmpNewMsg;
+        repMsg = tmpRepMsg;
       }
       break;
   }
@@ -148,6 +161,11 @@ void loop() {
     Serial.print(rcvMsgR, HEX);
     Serial.print("\n");
     newMsg = false;
+  } else if (repMsg == true) {
+    Serial.print(rcvMsgL, HEX);
+    Serial.print(rcvMsgR, HEX);
+    Serial.print("r\n");
+    repMsg = false;
   }
 }
 
