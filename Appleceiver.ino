@@ -35,7 +35,27 @@ boolean tmpRepMsg = false;
 int repInstances = 0;
 #define repHoldoff 4 //100ms each
 
+#define appleAddress  0x77E1  
+#define applePlus     0x509D
+#define applePrevious 0x909D
+#define applePlay     0xA09D
+#define appleNext     0x609D
+#define appleMinus    0x309D
+#define appleMenu     0xC09D
+
+//these might be teensy
+#define plusAct     KEY_UP
+#define previousAct KEY_LEFT
+#define playAct     KEY_ENTER
+#define nextAct     KEY_RIGHT
+#define minusAct    KEY_DOWN
+#define menuAct     KEY_BACKSPACE
+
+#define ledPersist 75000 //us
+int ledStarted = 0;
+
 unsigned long microsDelta(unsigned long last, unsigned long now);
+void decodeApple(unsigned int address, unsigned int message);
 
 int lastRcvState = 99;
 
@@ -43,8 +63,9 @@ void setup() {
   pinMode(buttonPin, INPUT);
   pinMode(irPin, INPUT);
   pinMode(ledPin, OUTPUT);
-//  Keyboard.begin();
-  Serial.begin(9600);
+  Keyboard.begin();
+  Keyboard.set_modifier(0);
+//  Serial.begin(9600);
 }
 
 void loop() {
@@ -57,7 +78,6 @@ void loop() {
   
   switch(rcvState) {
     case none:
-      digitalWrite(ledPin, LOW);
       //if the input is low, start timing the start low pulse
       if (digitalRead(irPin) == LOW) {
         startTime = micros();
@@ -75,8 +95,8 @@ void loop() {
           rcvState++;
         } else {
           //bad starting low pulse, abort
-          Serial.print(duration, DEC);
-          Serial.print(" BADSTARTL!\n");
+//          Serial.print(duration, DEC);
+//          Serial.print(" BADSTARTL!\n");
           rcvState = none;
         }
       }
@@ -97,8 +117,8 @@ void loop() {
           rcvState = stopLow;          
         } else {
           //bad starting high pulse, abort
-          Serial.print(duration, DEC);
-          Serial.print(" BADSTARTH!\n");
+//          Serial.print(duration, DEC);
+//          Serial.print(" BADSTARTH!\n");
           rcvState = none;
         }
       }
@@ -112,8 +132,8 @@ void loop() {
           rcvState++;
         } else {
           //bad bit low pulse, abort
-          Serial.print(duration, DEC);
-          Serial.print(" BADBITL!\n");
+//          Serial.print(duration, DEC);
+//          Serial.print(" BADBITL!\n");
           rcvState = none;
         }
       }
@@ -139,8 +159,8 @@ void loop() {
           }
         } else {
           //bad bit high pulse, abort
-          Serial.print(duration, DEC);
-          Serial.print(" BADBITH!\n");
+//          Serial.print(duration, DEC);
+//          Serial.print(" BADBITH!\n");
           rcvState = none;
         }
         if (rcvBit == 15) {
@@ -159,13 +179,12 @@ void loop() {
       break;
   }
   
-  digitalWrite(ledPin, LOW);
   if (newMsg == true) {
-    digitalWrite(ledPin, HIGH);
-    Serial.print(rcvMsgL, HEX);
-    Serial.print(rcvMsgR, HEX);
-    Serial.print("\n");
-    newMsg = false;
+//    Serial.print(rcvMsgL, HEX);
+//    Serial.print(rcvMsgR, HEX);
+//    Serial.print("\n");
+      decodeApple(rcvMsgL, rcvMsgR);
+      newMsg = false;
     repInstances = 0;
   } else if (repMsg == true) {
     if (++repInstances < repHoldoff) {
@@ -173,13 +192,18 @@ void loop() {
 //      Serial.print(rcvMsgR, HEX);
 //      Serial.print("n\n");
     } else {
-      digitalWrite(ledPin, HIGH);
-      Serial.print(rcvMsgL, HEX);
-      Serial.print(rcvMsgR, HEX);
-      Serial.print("r\n");
+      decodeApple(rcvMsgL, rcvMsgR);
+//      Serial.print(rcvMsgL, HEX);
+//      Serial.print(rcvMsgR, HEX);
+//      Serial.print("r\n");
     }
     repMsg = false;
   }
+  
+  int difference = microsDelta(ledStarted, micros());
+  if (difference > (unsigned long) ledPersist) {
+    digitalWrite(ledPin, LOW);
+  }  
 }
 
 unsigned long microsDelta(unsigned long lastT, unsigned long nowT) {
@@ -188,4 +212,35 @@ unsigned long microsDelta(unsigned long lastT, unsigned long nowT) {
   } else {
     return nowT - lastT + 4294967295;
   }
+}
+
+void decodeApple(unsigned int address, unsigned int message) {
+  if (address != appleAddress) {
+    return;
+  }
+  switch (message) {
+    case applePlus:
+      Keyboard.set_key1(plusAct);
+      break;
+    case applePrevious:
+      Keyboard.set_key1(previousAct);
+      break;
+    case applePlay:
+      Keyboard.set_key1(playAct);
+      break;
+    case appleNext:
+      Keyboard.set_key1(nextAct);
+      break;
+    case appleMinus:
+      Keyboard.set_key1(minusAct);
+      break;
+    case appleMenu:
+      Keyboard.set_key1(menuAct);
+      break;
+  }
+  digitalWrite(ledPin, HIGH);
+  ledStarted = micros();
+  Keyboard.send_now();
+  Keyboard.set_key1(0);
+  Keyboard.send_now();
 }
