@@ -32,6 +32,9 @@ boolean tmpRepMsg = false;
 #define repHighMinT 2000
 #define repHighMaxT 2400
 
+int repInstances = 0;
+#define repHoldoff 4 //100ms each
+
 unsigned long microsDelta(unsigned long last, unsigned long now);
 
 int lastRcvState = 99;
@@ -161,10 +164,17 @@ void loop() {
     Serial.print(rcvMsgR, HEX);
     Serial.print("\n");
     newMsg = false;
+    repInstances = 0;
   } else if (repMsg == true) {
-    Serial.print(rcvMsgL, HEX);
-    Serial.print(rcvMsgR, HEX);
-    Serial.print("r\n");
+    if (++repInstances < repHoldoff) {
+//      Serial.print(rcvMsgL, HEX);
+//      Serial.print(rcvMsgR, HEX);
+//      Serial.print("n\n");
+    } else {
+      Serial.print(rcvMsgL, HEX);
+      Serial.print(rcvMsgR, HEX);
+      Serial.print("r\n");
+    }
     repMsg = false;
   }
 }
