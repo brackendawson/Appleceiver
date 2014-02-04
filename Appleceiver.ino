@@ -1,246 +1,234 @@
-const int buttonPin = 4;
-const int irPin = 5;
-const int ledPin = 6;
+#define IR_PIN  5
+#define LED_PIN 6
 
 //NEC IR receiver state machine
-#define none      0
-#define startLow  1
-#define startHigh 2
-#define bitLow    3
-#define bitHigh   4
-#define stopLow   5
-#define repHigh   6
-unsigned long startTime;
-int rcvState = 0;
-int rcvBit = 31;
-unsigned int rcvMsgL;
-unsigned int rcvMsgR;
-boolean newMsg = false;
-boolean tmpNewMsg = false;
-boolean repMsg = false;
-boolean tmpRepMsg = false;
-#define startLowMinT 8800 //us
-#define startLowMaxT 9200
-#define startHighMinT 4300
-#define startHighMaxT 4700
-#define bitLowMinT 380
-#define bitLowMaxT 780
-#define bit0HighMinT 380
-#define bit0HighMaxT 780
-#define bit1HighMinT 1500
-#define bit1HighMaxT 1900
-#define repHighMinT 2000
-#define repHighMaxT 2400
+//State machine states
+#define NONE_HIGH       0
+#define START_LOW       1
+#define START_HIGH      2
+#define BIT_LOW         3
+#define BIT_HIGH        4
+#define STOP_LOW        5
+#define REPEAT_HIGH     6
+//variables and flags
+unsigned long start_time;
+int rcv_state = NONE_HIGH;
+int rcv_bit = 31;
+unsigned int rcv_msg_l;
+unsigned int rcv_msg_r;
+boolean new_msg = false;
+boolean tmp_new_msg = false;
+boolean rep_msg = false;
+boolean tmp_rep_msg = false;
+//timing constraints
+#define START_LOW_MIN_T         8800 //us
+#define START_LOW_MAX_T         9200
+#define START_HIGH_MIN_T        4300
+#define START_HIGH_MAX_T        4700
+#define BIT_LOW_MIN_T           380
+#define BIT_LOW_MAX_T           780
+#define BIT_0_HIGH_MIN_T        380
+#define BIT_0_HIGH_MAX_T        780
+#define BIT_1_HIGH_MIN_T        1500
+#define BIT_1_HIGH_MAX_T        1900
+#define REP_HIGH_MIN_T          2000
+#define REP_HIGH_MAX_T          2400
 
-int repInstances = 0;
-#define repHoldoff 4 //100ms each
+//repeat code handler definitions
+int rep_instances = 0;
+#define REP_HOLDOFF 4 //100ms each
 
-#define appleAddress  0x77E1  
-#define applePlus     0x509D
-#define applePrevious 0x909D
-#define applePlay     0xA09D
-#define appleNext     0x609D
-#define appleMinus    0x309D
-#define appleMenu     0xC09D
+//Apple remote definitions
+//Address
+#define A1156_ADDRESS   0x77E1  
+//Button codes
+#define A1156_PLUS      0x509D
+#define A1156_PREVIOUS  0x909D
+#define A1156_PLAY      0xA09D
+#define A1156_NEXT      0x609D
+#define A1156_MINUS     0x309D
+#define A1156_MENU      0xC09D
 
-//these might be teensy
-#define plusAct     KEY_UP
-#define previousAct KEY_LEFT
-#define playAct     KEY_ENTER
-#define nextAct     KEY_RIGHT
-#define minusAct    KEY_DOWN
-#define menuAct     KEY_BACKSPACE
+//Key assignments, these might be teensy only
+#define PLUS_ACT        KEY_UP
+#define PREVIOUS_ACT    KEY_LEFT
+#define PLAY_ACT        KEY_ENTER
+#define NEXT_ACT        KEY_RIGHT
+#define MINUS_ACT       KEY_DOWN
+#define MENU_ACT        KEY_BACKSPACE
 
-#define ledPersist 75000 //us
-int ledStarted = 0;
+//recevie indicator LED definitions
+#define LED_PERSIST     75000 //us
+int led_started = 0;
 
-unsigned long microsDelta(unsigned long last, unsigned long now);
-void decodeApple(unsigned int address, unsigned int message);
-
-int lastRcvState = 99;
+//prototypes
+unsigned long micros_delta(unsigned long last_t, unsigned long now_t);
+void decode_apple(unsigned int address, unsigned int message);
 
 void setup() {
-  pinMode(buttonPin, INPUT);
-  pinMode(irPin, INPUT);
-  pinMode(ledPin, OUTPUT);
+  pinMode(IR_PIN, INPUT);
+  pinMode(LED_PIN, OUTPUT);
   Keyboard.begin();
   Keyboard.set_modifier(0);
-//  Serial.begin(9600);
 }
 
 void loop() {
-  //state transition tracing
-  /*if (rcvState != lastRcvState) {
-    Serial.print(rcvState, DEC);
-    Serial.print("s\n");
-    lastRcvState = rcvState;
-  }*/
   
-  switch(rcvState) {
-    case none:
-      //if the input is low, start timing the start low pulse
-      if (digitalRead(irPin) == LOW) {
-        startTime = micros();
-        rcvState++;
+  switch(rcv_state) {
+    case NONE_HIGH:
+      /*if the input is low, start timing the start low pulse*/
+      if (digitalRead(IR_PIN) == LOW) {
+        start_time = micros();
+        rcv_state = START_LOW;
       }
       break;
-    case startLow:
-      //if the input is high, validate the length of the start low pulse and start timing the start high pulse
-      if (digitalRead(irPin) == HIGH) {
-        unsigned long duration = microsDelta(startTime, micros());
-        if ((duration > startLowMinT) and (duration < startLowMaxT)) {
-          startTime = micros();
-          tmpNewMsg = false;
-          tmpRepMsg = false;
-          rcvState++;
+    case START_LOW:
+      /*if the input is high, validate the length of the start low
+       pulse and start timing the start high pulse.*/
+      if (digitalRead(IR_PIN) == HIGH) {
+        unsigned long duration = micros_delta(start_time, micros());
+        if ((duration > START_LOW_MIN_T) and (duration < START_LOW_MAX_T)) {
+          start_time = micros();
+          tmp_new_msg = false;
+          tmp_rep_msg = false;
+          rcv_state = START_HIGH;
         } else {
           //bad starting low pulse, abort
-//          Serial.print(duration, DEC);
-//          Serial.print(" BADSTARTL!\n");
-          rcvState = none;
+          rcv_state = NONE_HIGH;
         }
       }
       break;
-    case startHigh:
-      //if the input is low, validate the length of the start high pulse and start timing the first bit low pulse, or detect a repet code and watch the stop low pulse
-      if (digitalRead(irPin) == LOW) {
-        unsigned long duration = microsDelta(startTime, micros());
-        if ((duration > startHighMinT) and (duration < startHighMaxT)) {
-          startTime = micros();
-          rcvMsgL = 0;
-          rcvMsgR = 0;
-          rcvBit = 31;
-          tmpNewMsg = true;
-          rcvState++;
-        } else if ((duration > repHighMinT) and (duration < repHighMaxT)) {
-          tmpRepMsg = true;
-          rcvState = stopLow;          
+    case START_HIGH:
+      /*if the input is low, validate the length of the start high
+       pulse and start timing the first bit low pulse, or detect a
+       repet code and watch the stop low pulse.*/
+      if (digitalRead(IR_PIN) == LOW) {
+        unsigned long duration = micros_delta(start_time, micros());
+        if ((duration > START_HIGH_MIN_T) and (duration < START_HIGH_MAX_T)) {
+          start_time = micros();
+          rcv_msg_l = 0;
+          rcv_msg_r = 0;
+          rcv_bit = 31;
+          tmp_new_msg = true;
+          rcv_state = BIT_LOW;
+        } else if ((duration > REP_HIGH_MIN_T) and (duration < REP_HIGH_MAX_T)) {
+          tmp_rep_msg = true;
+          rcv_state = STOP_LOW;          
         } else {
           //bad starting high pulse, abort
-//          Serial.print(duration, DEC);
-//          Serial.print(" BADSTARTH!\n");
-          rcvState = none;
+          rcv_state = NONE_HIGH;
         }
       }
       break;
-    case bitLow:
-      //if the input is high, validate the length of the bit low pulse and start timing the bit high pulse
-      if (digitalRead(irPin) == HIGH) {
-        unsigned long duration = microsDelta(startTime, micros());
-        if ((duration > bitLowMinT) and (duration < bitLowMaxT)) {
-          startTime = micros();
-          rcvState++;
+    case BIT_LOW:
+      /*if the input is high, validate the length of the bit low pulse
+       and start timing the bit high pulse.*/
+      if (digitalRead(IR_PIN) == HIGH) {
+        unsigned long duration = micros_delta(start_time, micros());
+        if ((duration > BIT_LOW_MIN_T) and (duration < BIT_LOW_MAX_T)) {
+          start_time = micros();
+          rcv_state = BIT_HIGH;
         } else {
           //bad bit low pulse, abort
-//          Serial.print(duration, DEC);
-//          Serial.print(" BADBITL!\n");
-          rcvState = none;
+          rcv_state = NONE_HIGH;
         }
       }
       break;
-    case bitHigh:
-      //if the input is low, validate the length of the bit high pulse, determine the value and start timing the next bit low pulse if there is a next bit else watch the stop low pulse
-      if (digitalRead(irPin) == LOW) {
-        unsigned long duration = microsDelta(startTime, micros());
-        if ((duration > bit0HighMinT) and (duration < bit0HighMaxT)) {
-          startTime = micros();
-          if (rcvBit--) {
-            rcvState--;
+    case BIT_HIGH:
+      /*if the input is low, validate the length of the bit high pulse,
+       determine the value and start timing the next bit low pulse if there
+       is a next bit else watch the stop low pulse.*/
+      if (digitalRead(IR_PIN) == LOW) {
+        unsigned long duration = micros_delta(start_time, micros());
+        if ((duration > BIT_0_HIGH_MIN_T) and (duration < BIT_0_HIGH_MAX_T)) {
+          start_time = micros();
+          if (rcv_bit--) {
+            rcv_state = BIT_LOW;
           } else {
-            rcvState++;
+            rcv_state = STOP_LOW;
           }
-        } else if ((duration > bit1HighMinT) and (duration < bit1HighMaxT)) {
-          startTime = micros();
-          rcvMsgR |= (1 << (rcvBit % 16));
-          if (rcvBit--) {
-            rcvState--;
+        } else if ((duration > BIT_1_HIGH_MIN_T) and (duration < BIT_1_HIGH_MAX_T)) {
+          start_time = micros();
+          rcv_msg_r |= (1 << (rcv_bit % 16));
+          if (rcv_bit--) {
+            rcv_state = BIT_LOW;
           } else {
-            rcvState++;
+            rcv_state = STOP_LOW;
           }
         } else {
           //bad bit high pulse, abort
-//          Serial.print(duration, DEC);
-//          Serial.print(" BADBITH!\n");
-          rcvState = none;
+          rcv_state = NONE_HIGH;
         }
-        if (rcvBit == 15) {
-          rcvMsgL = rcvMsgR;
-          rcvMsgR = 0;
+        if (rcv_bit == 15) {
+          rcv_msg_l = rcv_msg_r;
+          rcv_msg_r = 0;
         }
       }
       break;
-    case stopLow:
-      //forget timing, just wait for the in put to go high
-      if (digitalRead(irPin) == HIGH) {
-        rcvState = none;
-        newMsg = tmpNewMsg;
-        repMsg = tmpRepMsg;
+    case STOP_LOW:
+      /*Forget timing, just wait for the in put to go high*/
+      if (digitalRead(IR_PIN) == HIGH) {
+        rcv_state = NONE_HIGH;
+        new_msg = tmp_new_msg;
+        rep_msg = tmp_rep_msg;
       }
       break;
   }
   
-  if (newMsg == true) {
-//    Serial.print(rcvMsgL, HEX);
-//    Serial.print(rcvMsgR, HEX);
-//    Serial.print("\n");
-      decodeApple(rcvMsgL, rcvMsgR);
-      newMsg = false;
-    repInstances = 0;
-  } else if (repMsg == true) {
-    if (++repInstances < repHoldoff) {
-//      Serial.print(rcvMsgL, HEX);
-//      Serial.print(rcvMsgR, HEX);
-//      Serial.print("n\n");
+  if (new_msg == true) {
+      decode_apple(rcv_msg_l, rcv_msg_r);
+      new_msg = false;
+    rep_instances = 0;
+  } else if (rep_msg == true) {
+    if (++rep_instances < REP_HOLDOFF) {
     } else {
-      decodeApple(rcvMsgL, rcvMsgR);
-//      Serial.print(rcvMsgL, HEX);
-//      Serial.print(rcvMsgR, HEX);
-//      Serial.print("r\n");
+      decode_apple(rcv_msg_l, rcv_msg_r);
     }
-    repMsg = false;
+    rep_msg = false;
   }
   
-  int difference = microsDelta(ledStarted, micros());
-  if (difference > (unsigned long) ledPersist) {
-    digitalWrite(ledPin, LOW);
+  int difference = micros_delta(led_started, micros());
+  if (difference > (unsigned long) LED_PERSIST) {
+    digitalWrite(LED_PIN, LOW);
   }  
 }
 
-unsigned long microsDelta(unsigned long lastT, unsigned long nowT) {
-  if (nowT > lastT) {
-    return nowT - lastT;
-  } else {
-    return nowT - lastT + 4294967295;
+unsigned long micros_delta(unsigned long last_t, unsigned long now_t) {
+  if (now_t > last_t) {
+    return now_t - last_t;
   }
+  //micros() wrapped, happens ~ every 70 mins
+  return now_t - last_t + 4294967295;
 }
 
-void decodeApple(unsigned int address, unsigned int message) {
-  if (address != appleAddress) {
+void decode_apple(unsigned int address, unsigned int message) {
+  if (address != A1156_ADDRESS) {
     return;
   }
   switch (message) {
-    case applePlus:
-      Keyboard.set_key1(plusAct);
+    case A1156_PLUS:
+      Keyboard.set_key1(PLUS_ACT);
       break;
-    case applePrevious:
-      Keyboard.set_key1(previousAct);
+    case A1156_PREVIOUS:
+      Keyboard.set_key1(PREVIOUS_ACT);
       break;
-    case applePlay:
-      Keyboard.set_key1(playAct);
+    case A1156_PLAY:
+      Keyboard.set_key1(PLAY_ACT);
       break;
-    case appleNext:
-      Keyboard.set_key1(nextAct);
+    case A1156_NEXT:
+      Keyboard.set_key1(NEXT_ACT);
       break;
-    case appleMinus:
-      Keyboard.set_key1(minusAct);
+    case A1156_MINUS:
+      Keyboard.set_key1(MINUS_ACT);
       break;
-    case appleMenu:
-      Keyboard.set_key1(menuAct);
+    case A1156_MENU:
+      Keyboard.set_key1(MENU_ACT);
       break;
   }
-  digitalWrite(ledPin, HIGH);
-  ledStarted = micros();
+  digitalWrite(LED_PIN, HIGH);
+  led_started = micros();
   Keyboard.send_now();
   Keyboard.set_key1(0);
   Keyboard.send_now();
+  return;
 }
