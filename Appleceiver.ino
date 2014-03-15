@@ -58,7 +58,7 @@ int rep_instances = 0;
 #define MENU_ACT        KEY_BACKSPACE
 
 //recevie indicator LED definitions
-#define LED_PERSIST     75000 //us
+#define LED_PERSIST     50000 //us
 unsigned long led_started = 0;
 
 //X kill feature
