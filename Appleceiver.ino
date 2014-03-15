@@ -59,7 +59,15 @@ int rep_instances = 0;
 
 //recevie indicator LED definitions
 #define LED_PERSIST     75000 //us
-int led_started = 0;
+unsigned long led_started = 0;
+
+//X kill feature
+#define X_KILL_CONTROLLER  0x77E1
+#define X_KILL_BUTTON      0xC09D
+#define X_KILL_TIMEOUT     150000 //150ms (100ms repeat on controller)
+#define X_KILL_DURATION    100 //10s with 100ms repeat
+int x_kill_pending       = 0;
+unsigned long x_kill_started = 0;
 
 //prototypes
 unsigned long micros_delta(unsigned long last_t, unsigned long now_t);
@@ -70,6 +78,7 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   Keyboard.begin();
   Keyboard.set_modifier(0);
+  Serial.begin(9600);
 }
 
 void loop() {
@@ -183,14 +192,27 @@ void loop() {
     if (++rep_instances < REP_HOLDOFF) {
     } else {
       decode_apple(rcv_msg_l, rcv_msg_r);
+      decode_x_kill(rcv_msg_l, rcv_msg_r);
     }
     rep_msg = false;
   }
   
-  int difference = micros_delta(led_started, micros());
-  if (difference > (unsigned long) LED_PERSIST) {
-    digitalWrite(LED_PIN, LOW);
-  }  
+  //turn the LED off if it's been long enough
+  if (led_started) {
+    unsigned long difference = micros_delta(led_started, micros());
+    if (difference > LED_PERSIST) {
+      digitalWrite(LED_PIN, LOW);
+      led_started = 0;
+    }
+  }
+  
+  //Forget X kill if it's been long enough (user let go of button)
+  if (x_kill_pending) {
+    unsigned long difference = micros_delta(x_kill_started, micros());
+    if (difference > X_KILL_TIMEOUT) {
+      x_kill_pending = 0;
+    }
+  }
 }
 
 unsigned long micros_delta(unsigned long last_t, unsigned long now_t) {
@@ -231,4 +253,21 @@ void decode_apple(unsigned int address, unsigned int message) {
   Keyboard.set_key1(0);
   Keyboard.send_now();
   return;
+}
+
+void decode_x_kill(unsigned int address, unsigned int message) {
+  if ((address == X_KILL_CONTROLLER) and (message == X_KILL_BUTTON)) {
+    x_kill_started = micros();
+    x_kill_pending++;
+  }
+  if (x_kill_pending > X_KILL_DURATION) {
+    //KILL X NOW
+    Keyboard.set_modifier(MODIFIERKEY_CTRL | MODIFIERKEY_ALT);
+    Keyboard.set_key1(KEY_BACKSPACE);
+    Keyboard.send_now();
+    Keyboard.set_modifier(0);
+    Keyboard.set_key1(0);
+    Keyboard.send_now();
+    x_kill_pending = 0;
+  }
 }
