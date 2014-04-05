@@ -1,5 +1,5 @@
-#define IR_PIN  5
-#define LED_PIN 6
+#define IR_PIN  12
+#define LED_PIN 13
 
 //NEC IR receiver state machine
 //State machine states
@@ -50,11 +50,11 @@ int rep_instances = 0;
 #define A1156_MENU      0xC09D
 
 //Key assignments, these might be teensy only
-#define PLUS_ACT        KEY_UP
-#define PREVIOUS_ACT    KEY_LEFT
-#define PLAY_ACT        KEY_ENTER
-#define NEXT_ACT        KEY_RIGHT
-#define MINUS_ACT       KEY_DOWN
+#define PLUS_ACT        KEY_UP_ARROW
+#define PREVIOUS_ACT    KEY_LEFT_ARROW
+#define PLAY_ACT        KEY_RETURN
+#define NEXT_ACT        KEY_RIGHT_ARROW
+#define MINUS_ACT       KEY_DOWN_ARROW
 #define MENU_ACT        KEY_BACKSPACE
 
 //recevie indicator LED definitions
@@ -77,8 +77,7 @@ void setup() {
   pinMode(IR_PIN, INPUT);
   pinMode(LED_PIN, OUTPUT);
   Keyboard.begin();
-  Keyboard.set_modifier(0);
-  Serial.begin(9600);
+  //Serial.begin(9600);
 }
 
 void loop() {
@@ -229,29 +228,32 @@ void decode_apple(unsigned int address, unsigned int message) {
   }
   switch (message) {
     case A1156_PLUS:
-      Keyboard.set_key1(PLUS_ACT);
+      Keyboard.press(PLUS_ACT);
+      Keyboard.releaseAll();
       break;
     case A1156_PREVIOUS:
-      Keyboard.set_key1(PREVIOUS_ACT);
+      Keyboard.press(PREVIOUS_ACT);
+      Keyboard.releaseAll();
       break;
     case A1156_PLAY:
-      Keyboard.set_key1(PLAY_ACT);
+      Keyboard.press(PLAY_ACT);
+      Keyboard.releaseAll();
       break;
     case A1156_NEXT:
-      Keyboard.set_key1(NEXT_ACT);
+      Keyboard.press(NEXT_ACT);
+      Keyboard.releaseAll();
       break;
     case A1156_MINUS:
-      Keyboard.set_key1(MINUS_ACT);
+      Keyboard.press(MINUS_ACT);
+      Keyboard.releaseAll();
       break;
     case A1156_MENU:
-      Keyboard.set_key1(MENU_ACT);
+      Keyboard.press(MENU_ACT);
+      Keyboard.releaseAll();
       break;
   }
   digitalWrite(LED_PIN, HIGH);
   led_started = micros();
-  Keyboard.send_now();
-  Keyboard.set_key1(0);
-  Keyboard.send_now();
   return;
 }
 
@@ -262,12 +264,10 @@ void decode_x_kill(unsigned int address, unsigned int message) {
   }
   if (x_kill_pending > X_KILL_DURATION) {
     //KILL X NOW
-    Keyboard.set_modifier(MODIFIERKEY_CTRL | MODIFIERKEY_ALT);
-    Keyboard.set_key1(KEY_BACKSPACE);
-    Keyboard.send_now();
-    Keyboard.set_modifier(0);
-    Keyboard.set_key1(0);
-    Keyboard.send_now();
+    Keyboard.press(KEY_LEFT_CTRL);
+    Keyboard.press(KEY_LEFT_ALT);
+    Keyboard.press(KEY_BACKSPACE);
+    Keyboard.releaseAll();
     x_kill_pending = 0;
   }
 }
