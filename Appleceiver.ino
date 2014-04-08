@@ -9,7 +9,6 @@
 #define BIT_LOW         3
 #define BIT_HIGH        4
 #define STOP_LOW        5
-#define REPEAT_HIGH     6
 //variables and flags
 unsigned long start_time;
 int rcv_state = NONE_HIGH;
@@ -36,7 +35,7 @@ boolean tmp_rep_msg = false;
 
 //repeat code handler definitions
 int rep_instances = 0;
-#define REP_HOLDOFF 4 //100ms each
+#define REP_HOLDOFF 3 //100ms each
 
 //Apple remote definitions
 //Address
@@ -188,8 +187,7 @@ void loop() {
       new_msg = false;
     rep_instances = 0;
   } else if (rep_msg == true) {
-    if (++rep_instances < REP_HOLDOFF) {
-    } else {
+    if (++rep_instances > REP_HOLDOFF) {
       decode_apple(rcv_msg_l, rcv_msg_r);
       decode_x_kill(rcv_msg_l, rcv_msg_r);
     }
