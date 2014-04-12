@@ -40,13 +40,23 @@ int rep_instances = 0;
 //Apple remote definitions
 //Address
 #define A1156_ADDRESS   0x77E1  
-//Button codes
-#define A1156_PLUS      0x509D
-#define A1156_PREVIOUS  0x909D
-#define A1156_PLAY      0xA09D
-#define A1156_NEXT      0x609D
-#define A1156_MINUS     0x309D
-#define A1156_MENU      0xC09D
+/*Button codes
+ I've seen many remotes have various codes,
+ this is the best decode I have. The address
+ is fixed, the message may be as so:
+ #define A1156_BUT_PLUS  0x   5    0    9    D
+                           0101 0000 1001 1101
+                           ||      | |       |
+ varies, battery flat?-----+|      | |       |
+ fixed?, the button---------+------+ |       |
+ varies, serial number?--------------+-------+ */
+#define A1156_MASK          0x7F00
+#define A1156_BUT_PLUS      0x5000
+#define A1156_BUT_PREVIOUS  0x9000
+#define A1156_BUT_PLAY      0xA000
+#define A1156_BUT_NEXT      0x6000
+#define A1156_BUT_MINUS     0x3000
+#define A1156_BUT_MENU      0xC000
 
 //Key assignments, these might be teensy only
 #define PLUS_ACT        KEY_UP_ARROW
@@ -178,6 +188,14 @@ void loop() {
         rcv_state = NONE_HIGH;
         new_msg = tmp_new_msg;
         rep_msg = tmp_rep_msg;
+        if (rep_msg == true) {
+          Serial.println("NEC repeat code");
+        } else {
+          Serial.print("NEC packet addr=");
+          Serial.print(rcv_msg_l, HEX);
+          Serial.print(" msg=");
+          Serial.println(rcv_msg_r, HEX);
+        }
       }
       break;
   }
@@ -224,31 +242,34 @@ void decode_apple(unsigned int address, unsigned int message) {
   if (address != A1156_ADDRESS) {
     return;
   }
+  message &= A1156_MASK;
   switch (message) {
-    case A1156_PLUS:
+    case A1156_BUT_PLUS:
       Keyboard.press(PLUS_ACT);
       Keyboard.releaseAll();
       break;
-    case A1156_PREVIOUS:
+    case A1156_BUT_PREVIOUS:
       Keyboard.press(PREVIOUS_ACT);
       Keyboard.releaseAll();
       break;
-    case A1156_PLAY:
+    case A1156_BUT_PLAY:
       Keyboard.press(PLAY_ACT);
       Keyboard.releaseAll();
       break;
-    case A1156_NEXT:
+    case A1156_BUT_NEXT:
       Keyboard.press(NEXT_ACT);
       Keyboard.releaseAll();
       break;
-    case A1156_MINUS:
+    case A1156_BUT_MINUS:
       Keyboard.press(MINUS_ACT);
       Keyboard.releaseAll();
       break;
-    case A1156_MENU:
+    case A1156_BUT_MENU:
       Keyboard.press(MENU_ACT);
       Keyboard.releaseAll();
       break;
+    default:
+      return;
   }
   digitalWrite(LED_PIN, HIGH);
   led_started = micros();
