@@ -32,6 +32,8 @@ boolean tmp_rep_msg = false;
 #define BIT_1_HIGH_MAX_T        1900
 #define REP_HIGH_MIN_T          2000
 #define REP_HIGH_MAX_T          2400
+#define REP_TIMEOUT             350000 // 3 repeat codescan be lost without impact
+unsigned long nec_repeat_started = 0;
 
 //repeat code handler definitions
 int rep_instances = 0;
@@ -188,6 +190,12 @@ void loop() {
         rcv_state = NONE_HIGH;
         new_msg = tmp_new_msg;
         rep_msg = tmp_rep_msg;
+        
+        /*start the repeat timeout here to catch packets and
+         repeat codes.*/
+        nec_repeat_started = micros();
+        
+        //debug
         if (rep_msg == true) {
           Serial.println("NEC repeat code");
         } else {
@@ -198,6 +206,16 @@ void loop() {
         }
       }
       break;
+  }
+  
+  /* disable repet codes by setting the massage 
+   and address to 0 after the timout. */
+  if (nec_repeat_started) {
+    unsigned long difference = micros_delta(nec_repeat_started, micros());
+    if (difference > REP_TIMEOUT) {
+      rcv_msg_l = rcv_msg_r = 0;
+      nec_repeat_started = 0;
+    }
   }
   
   if (new_msg == true) {
