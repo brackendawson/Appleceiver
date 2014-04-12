@@ -54,11 +54,11 @@ int rep_instances = 0;
  varies, serial number?--------------+-------+ */
 #define A1156_MASK          0x7F00
 #define A1156_BUT_PLUS      0x5000
-#define A1156_BUT_PREVIOUS  0x9000
-#define A1156_BUT_PLAY      0xA000
+#define A1156_BUT_PREVIOUS  0x1000
+#define A1156_BUT_PLAY      0x2000
 #define A1156_BUT_NEXT      0x6000
 #define A1156_BUT_MINUS     0x3000
-#define A1156_BUT_MENU      0xC000
+#define A1156_BUT_MENU      0x4000
 
 //Key assignments, these might be teensy only
 #define PLUS_ACT        KEY_UP_ARROW
