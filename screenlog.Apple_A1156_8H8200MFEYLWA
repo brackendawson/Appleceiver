@@ -1,0 +1,10 @@
+NEC packet addr=77E1 msg=509D
+NEC repeat code
+NEC packet addr=77E1 msg=909D
+NEC repeat code
+NEC packet addr=77E1 msg=A09D
+NEC repeat code
+NEC packet addr=77E1 msg=609D
+NEC packet addr=77E1 msg=309D
+NEC packet addr=77E1 msg=C09D
+NEC repeat code
