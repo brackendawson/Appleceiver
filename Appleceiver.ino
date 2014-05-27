@@ -1,5 +1,6 @@
 #define IR_PIN  12
 #define LED_PIN 13
+#define DEBUG   0  //serial logging
 
 //NEC IR receiver state machine
 //State machine states
@@ -88,7 +89,9 @@ void setup() {
   pinMode(IR_PIN, INPUT);
   pinMode(LED_PIN, OUTPUT);
   Keyboard.begin();
-  //Serial.begin(9600);
+  if (DEBUG) {
+    Serial.begin(9600);
+  }
 }
 
 void loop() {
@@ -196,7 +199,7 @@ void loop() {
         nec_repeat_started = micros();
         
         //debug
-        if (rep_msg == true) {
+        if (DEBUG & (rep_msg == true)) {
           Serial.println("NEC repeat code");
         } else {
           Serial.print("NEC packet addr=");
